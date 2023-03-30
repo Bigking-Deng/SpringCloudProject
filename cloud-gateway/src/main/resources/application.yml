@@ -1,0 +1,55 @@
+server:
+  port: 9527
+  servlet:
+    context-path: /gateway
+
+spring:
+  application:
+    name: microservice-gateway
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+      routes:
+        - id: getConsumer_route
+#          uri: http://localhost:80
+          uri: lb://microservice-consumer
+          predicates:
+            - Path=/consumer/consumer/get/**
+
+
+        - id: insertDataThroughConsumer
+          uri: lb://microservice-consumer
+          predicates:
+            - Path=/consumer/consumer/insertToPayment
+            - Method=POST
+            - Query=id
+          filters:
+            - InsertDataCheck
+
+        - id: getConsumer_route_alias
+
+          uri: lb://microservice-consumer
+          predicates:
+#            - Path=/consumer/consumer/get/**
+            - Path=/gateway/getPayment/**
+          filters:
+            - RewritePath=/gateway/getPayment(?<segment>/?.*), /consumer/consumer/get$\{segment}
+
+
+      default-filters:
+        - AddResponseHeader=GatewayStamp,bigking's commend
+
+
+
+
+
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: http://localhost:7001/eureka/
+
