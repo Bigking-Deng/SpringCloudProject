@@ -16,7 +16,7 @@ import reactor.core.publisher.Mono;
 public class InsertDataCheckGatewayFilter implements GatewayFilter {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-//        ServerHttpRequest request = exchange.getRequest();
+        ServerHttpRequest request = exchange.getRequest();
         String value = exchange.getRequest().getQueryParams().getFirst("value");
         if(StringUtils.isEmpty(value)){
             exchange.getResponse().setStatusCode(HttpStatus.BAD_REQUEST);
