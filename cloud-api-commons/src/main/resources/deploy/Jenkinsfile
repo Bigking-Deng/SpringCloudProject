@@ -1,0 +1,164 @@
+// @Library ('csb_cicd') _
+@Library(['ciHelper@master']) _
+
+def buildArgs1 = [:]
+def buildArgs2 = [:]
+
+def imageTag() {
+//     gitCommitHash = sh (script: "git log -n 1 --pretty=format:'%h'", returnStdout: true).trim()
+//     // TODO: please put your cec-id as the image tags. NOTE: no space in cec-id please.
+//     gitCommitUser = "bange"
+//     tag = gitCommitUser + "_${BUILD_NUMBER}_" + gitCommitHash
+//         appVersion = sh (script: "grep -m1 'version' pom.xml | cut -d'<' -f2 | cut -d'>' -f2", returnStdout: true).trim()
+        tyear=sh (script: "date +%y", returnStdout: true).trim()
+        tmonth=sh (script: "date +%m", returnStdout: true).trim()
+        month=sh (script: "expr ${tmonth} + 0", returnStdout: true).trim()
+        tday=sh (script: "date +%d", returnStdout: true).trim()
+        year=sh (script: "expr ${tyear} + '2000'", returnStdout: true).trim()
+
+        FIRST_YEAR_OF_ANTI_FRAUD_SERVICE = 2017
+        pyear = sh  (script: "expr ${year} - $FIRST_YEAR_OF_ANTI_FRAUD_SERVICE", returnStdout: true).trim()
+        p_version= "${pyear}" + "." + "${month}"
+
+        sh "echo ${p_version}"
+        now_date="${year}${tmonth}${tday}"
+
+        sh "echo ${now_date}"
+        tag = "${p_version}"+ "-" +"${now_date}" + "_" + "${BUILD_NUMBER}"
+
+        if (env.MATS_ADM_BASE_BRANCHS == null) {
+                baseBranchs = ["origin/develop", "develop"]
+                echo "baseBranchs default: ${baseBranchs}"
+            } else {
+                baseBranchs = "${env.MATS_ADM_BASE_BRANCHS}".split(",")
+                echo "baseBranchs: ${baseBranchs}"
+            }
+            echo "baseBranchs: ${baseBranchs}"
+
+        isBaseBranch = false
+        for (branch in baseBranchs) {
+            branch = branch.trim()
+            branch = sh (script: "echo \"$branch\" | tr -d '\"'", returnStdout: true).trim()
+            echo "base branch: ${branch}"
+            if ("${GIT_BRANCH}" == "${branch}") {
+                echo "equal, branch is ${branch}"
+                isBaseBranch = true
+            }
+        }
+        if (!isBaseBranch) {
+            tag = "${tag}" + "_" + gitCommitHash
+        }
+
+        sh "echo ${tag}"
+        return tag
+}
+
+def controller_metaBody = {
+    artifact_id = imageTag() + "_fra"
+    image_tag = imageTag()
+    describe = "mats containment service pipeline"
+}
+
+// def backend_metaBody = {
+//     artifact_id = imageTag() + "_ba"
+//     image_tag = imageTag() + "_ba"
+//     describe = "ref app iw-backend ci pipeline"
+// }
+
+pipeline {
+    agent { label 'SJC' }
+    tools {
+        // Install the Maven version configured as "M3" and add it to the path.
+        maven "Maven3.6.3"
+//         jdk "jdk1.8"
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+         stage('Check Expected Branches') {
+                    steps {
+                        script {
+                            sh 'printenv | sort'
+
+                            if (env.MATS_ADM_EXPECTED_BRANCHS == null) {
+                                expectedBranchs = ["origin/develop", "develop"]
+                                echo "expectedBranchs default: ${expectedBranchs}"
+                            } else {
+                                expectedBranchs = "${env.MATS_ADM_EXPECTED_BRANCHS}".split(",")
+                                echo "expectedBranchs: ${expectedBranchs}"
+                            }
+                            echo "expectedBranchs: ${expectedBranchs}"
+
+                            expected = false
+                            tag = imageTag()
+                            for (branch in expectedBranchs) {
+                                branch = branch.trim()
+                                branch = sh (script: "echo \"$branch\" | tr -d '\"'", returnStdout: true).trim()
+                                echo "expected branch: ${branch}"
+                                if ("${GIT_BRANCH}" == "${branch}") {
+                                    echo "equal, branch is ${branch}"
+                                    expected = true
+                                }
+                            }
+                            if (!expected) {
+                                echo "not expected branch, current branch: ${GIT_BRANCH}, ONLY support branch: ${expectedBranchs}"
+                                error("This pipeline stops here!, current branch: ${GIT_BRANCH}, ONLY support branch: ${expectedBranchs}")
+                            }
+                            echo "Check Expected Branches done, current branch: ${GIT_BRANCH}, support branch: ${expectedBranchs}"
+                        }
+                    }
+                }
+
+
+        stage('Build Jar File') {
+            steps {
+//                 script {
+//                     sh "sed -i 's/: $SERVICE_ID/: $SERVICE_ID$HELM_SUFFIX/g' $SERVICE_ID/src/main/resources/bootstrap.yaml"
+//                 }
+//                 sh 'cp WBXmatsrainierSAPservice/advanced-diagnostic-meeting/settings.xml ~/.m2/'
+//                 sh 'cp WBXmatsrainierSAPservice/advanced-diagnostic-meeting/settings-security.xml ~/.m2/'
+                echo "Build by maven."
+                sh '. /etc/profile'
+                sh 'which mvn'
+                sh 'which java'
+                sh 'mvn --version'
+                sh 'pwd'
+                sh 'ls -la'
+                sh 'cd WBXmatsfraudbackendservice'
+                sh 'pwd'
+                sh 'cd WBXmatsfraudbackendservice && mvn clean'
+//                 sh 'rm -rf WBXmatsrainierSAPservice/advanced-diagnostic-meeting/lib/* || echo "delete lib error"'
+//                 sh 'cp WBXmatsrainierSAPservice/advanced-diagnostic-meeting/settings.xml ~/.m2/'
+//                 sh 'cp WBXmatsrainierSAPservice/advanced-diagnostic-meeting/settings-security.xml ~/.m2/'
+                sh 'ls -la'
+                sh 'cd WBXmatsfraudbackendservice && mvn install -Dmaven.test.skip=true'
+//                 sh 'mvn install -Dmaven.test.skip=true'
+                sh 'cd WBXmatsfraudbackendservice && mvn package -Dmaven.test.skip=true'
+//                 sh 'cd WBXmatsrainierSAPservice/advanced-diagnostic-meeting && ls -al lib'
+                // sh 'mvn package -Dmaven.test.skip=true -f WBXmatsrainierSAPservice/advanced-diagnostic-meeting/pom.xml'
+            }
+        }
+
+        stage('Build Image') {
+            steps {
+                script {
+                    buildArgs1 = [component: "fra", tag: imageTag(), metadata: controller_metaBody]
+                }
+                script {
+                    buildCI(this, buildArgs1)
+                }
+
+//                 script {
+//                      buildArgs2 = [component: "iw-backend", tag: imageTag() + "_ba", metadata: backend_metaBody]
+//                 }
+//                 script {
+//                      buildCI(this, buildArgs2)
+//                 }
+            }
+        }
+   }
+}
